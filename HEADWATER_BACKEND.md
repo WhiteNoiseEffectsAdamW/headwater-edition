@@ -17,9 +17,18 @@ See [HEADWATER.md](HEADWATER.md) for the device-side design.
 |------|-------|
 | **P1a** — per-summary anchors (`summary-<videoId>.xhtml`) | ✅ **Shipped.** Deep-link verified on-device. |
 | **P1b** — embedded manifest (`OEBPS/headwater-manifest.json`) | ✅ **Shipped.** Channels view live + verified on X4. |
-| **P0** — clean ISO title, no `dc:creator` | ✅ **Fixed in code** (commits `afd161d`, `28c9a10`) — **pending prod deploy + device re-sync.** The doubled `Headwater - Headwater — …` name we saw is pre-fix cached output. Backend emits `Headwater Daily 2026-06-29` (space, not em-dash — device-accepted, no parity change needed). |
-| **Rolling feed window** | ⏳ **Only remaining backend build.** Feed currently advertises **today's issue only**, so channel backlog is 1 day deep. Design exists (`docs/epub-sync-design.md`): last N completed, digest-aligned days, immutable per past day. Device already follows OPDS pagination and groups across issues → **zero device work to consume it.** |
+| **Rolling 14-day feed window** | ✅ **LIVE** (backend `6dde8ee`). Feed advertises the **last 14 completed digest-days**, newest-first, non-empty only — channel backlog is now 14 days deep. **Zero device work**; we already follow pagination + group across issues. Contract below. |
+| **P0** — clean ISO title, no `dc:creator` | ⏳ **Pending prod redeploy.** Fix coded (`afd161d`, `28c9a10`). Feed `<title>` is already clean (`Headwater Daily YYYY-MM-DD`) via the rolling-feed deploy, so the **device filename is clean now**; the remaining `dc:creator`/`dc:title` cleanup is EPUB-internal and cosmetic to the device (we label from the filename). |
+| **Named EPUB exports** | ⏳ **Committed, not pushed** (backend `8592ea7`, pending review). Manual "Download EPUB" sideload path takes an optional collection name → `dc:title = "Headwater — <Name>"`, filename `headwater-<name>.epub`. **By design these omit the manifest**, so they land in My Summaries (flat sideload), **not** Channels. See the open question below. |
+| **Per-summary manifest in exports** | ❓ **Open / not planned by backend.** Device is ready (Channels scans `/Headwater/My Summaries/` for manifests); backend currently keeps exports manifest-less by design. Until an export embeds a single-item manifest, saved summaries appear only under My Summaries. |
 | **P2** — AccountPage token + copy-URL onboarding | Open (see below). |
+
+### Rolling-feed contract (device-relevant, backend `6dde8ee`)
+- Entry `<title>` = `Headwater Daily YYYY-MM-DD` (ISO, date-led) — unique per issue, so filename dedup/sort holds.
+- Entry `<id>` + acquisition href = stable dated URL `…/opds/<token>/<date>.epub`.
+- `<updated>` = issue close timestamp (11:00 UTC of that day), **stable across fetches** (not request time).
+- Closed issues are **immutable** (`Cache-Control: max-age=86400`) → a dated URL always returns the same bytes; safe to cache device-side.
+- Day boundary = **11:00 UTC for everyone** (matches the timezone-less digest). Near-rollover email-vs-device drift is known/accepted.
 
 Manifest `issue.title` is the clean display source of truth (independent of `dc:title`);
 `issue.id` / `issue.date` are bare ISO. The device reads its issue-list label from the
