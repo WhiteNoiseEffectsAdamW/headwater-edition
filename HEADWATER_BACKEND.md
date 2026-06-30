@@ -20,7 +20,7 @@ See [HEADWATER.md](HEADWATER.md) for the device-side design.
 | **Rolling 14-day feed window** | ✅ **LIVE** (backend `6dde8ee`). Feed advertises the **last 14 completed digest-days**, newest-first, non-empty only — channel backlog is now 14 days deep. **Zero device work**; we already follow pagination + group across issues. Contract below. |
 | **P0** — clean ISO title, no `dc:creator` | ⏳ **Pending prod redeploy.** Fix coded (`afd161d`, `28c9a10`). Feed `<title>` is already clean (`Headwater Daily YYYY-MM-DD`) via the rolling-feed deploy, so the **device filename is clean now**; the remaining `dc:creator`/`dc:title` cleanup is EPUB-internal and cosmetic to the device (we label from the filename). |
 | **Named EPUB exports** | ⏳ **Committed, not pushed** (backend `8592ea7`, pending review). Manual "Download EPUB" sideload path takes an optional collection name → `dc:title = "Headwater — <Name>"`, filename `headwater-<name>.epub`. **By design these omit the manifest**, so they land in My Summaries (flat sideload), **not** Channels. See the open question below. |
-| **Per-summary manifest in exports** | ❓ **Open / not planned by backend.** Device is ready (Channels scans `/Headwater/My Summaries/` for manifests); backend currently keeps exports manifest-less by design. Until an export embeds a single-item manifest, saved summaries appear only under My Summaries. |
+| **Manifest in named exports** | ➡️ **Requested (2026-06-29).** Device is ready — Channels scans `/Headwater/My Summaries/` for manifests. Ask: emit the **same** `OEBPS/headwater-manifest.json` in export EPUBs, listing that export's videos (same per-item schema + matching anchors as the digest). Then saved collections merge into Channels with no device change. Manifest-less exports keep working (My Summaries only). See "Manifest in named exports" below. |
 | **P2** — AccountPage token + copy-URL onboarding | Open (see below). |
 
 ### Rolling-feed contract (device-relevant, backend `6dde8ee`)
@@ -29,6 +29,24 @@ See [HEADWATER.md](HEADWATER.md) for the device-side design.
 - `<updated>` = issue close timestamp (11:00 UTC of that day), **stable across fetches** (not request time).
 - Closed issues are **immutable** (`Cache-Control: max-age=86400`) → a dated URL always returns the same bytes; safe to cache device-side.
 - Day boundary = **11:00 UTC for everyone** (matches the timezone-less digest). Near-rollover email-vs-device drift is known/accepted.
+
+### Manifest in named exports — the ask (2026-06-29)
+**What:** when generating a named "Download EPUB" collection (`8592ea7`), also write the **same**
+`OEBPS/headwater-manifest.json` you already emit for daily digests — just scoped to the videos in
+that export instead of the day's set. No new schema, no new endpoint, same `epub.js` path.
+
+**Why:** the device's Channels view is built **only** from embedded manifests, and it now scans both
+`/Headwater/` and `/Headwater/My Summaries/` (where sideloaded exports land). With a manifest, each
+video in a saved collection merges into its channel in Channels automatically — **zero device change.**
+
+**Shape** (identical to the digest manifest, see §3):
+- `items[]` = one entry **per video in the export**, each `{ channelId, channel, videoId, videoTitle, anchor, date }`.
+- `anchor` must exactly match that video's TOC target in the export EPUB (reusing the digest's
+  `summary-<videoId>.xhtml` scheme makes this automatic).
+- `issue` block: `{ id, title, date }` — for an export, `id`/`title` can be the collection name; `date` the export date. (Device groups on `channelId`, so the issue block is informational here.)
+
+**Degradation:** an export **without** a manifest still works — it just shows under My Summaries and is
+absent from Channels. So this is purely additive; nothing breaks if it ships later or never.
 
 Manifest `issue.title` is the clean display source of truth (independent of `dc:title`);
 `issue.id` / `issue.date` are bare ISO. The device reads its issue-list label from the
