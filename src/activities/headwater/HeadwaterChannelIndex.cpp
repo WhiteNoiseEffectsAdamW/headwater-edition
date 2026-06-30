@@ -12,13 +12,13 @@
 
 namespace headwater {
 
-bool buildChannelIndex(ChannelIndex& out) {
-  out.channels.clear();
-
-  auto dir = Storage.open(ISSUES_DIR);
-  if (!dir || !dir.isDirectory()) return false;
-
-  std::map<std::string, Channel> byId;
+namespace {
+// Scan one directory's top-level EPUBs (non-recursive), folding each manifest's
+// items into byId. Missing directory or absent manifests are silently ignored so
+// the two scan roots are independent.
+void scanDir(const char* dirPath, std::map<std::string, Channel>& byId) {
+  auto dir = Storage.open(dirPath);
+  if (!dir || !dir.isDirectory()) return;
 
   char nameBuf[256];
   dir.rewindDirectory();
@@ -28,8 +28,9 @@ bool buildChannelIndex(ChannelIndex& out) {
     const std::string filename{nameBuf};
     if (!FsHelpers::hasEpubExtension(filename)) continue;
 
+    const std::string path = std::string(dirPath) + "/" + filename;
     Manifest manifest;
-    if (!loadManifest(std::string(ISSUES_DIR) + "/" + filename, manifest)) continue;
+    if (!loadManifest(path, manifest)) continue;
 
     for (const auto& item : manifest.items) {
       auto& ch = byId[item.channelId];
@@ -37,9 +38,18 @@ bool buildChannelIndex(ChannelIndex& out) {
         ch.channelId   = item.channelId;
         ch.displayName = item.channel.empty() ? item.channelId : item.channel;
       }
-      ch.entries.push_back({filename, item.anchor, item.videoTitle, item.date});
+      ch.entries.push_back({path, item.anchor, item.videoTitle, item.date});
     }
   }
+}
+}  // namespace
+
+bool buildChannelIndex(ChannelIndex& out) {
+  out.channels.clear();
+
+  std::map<std::string, Channel> byId;
+  scanDir(ISSUES_DIR, byId);
+  scanDir(MY_SUMMARIES_DIR, byId);
 
   if (byId.empty()) return false;
 

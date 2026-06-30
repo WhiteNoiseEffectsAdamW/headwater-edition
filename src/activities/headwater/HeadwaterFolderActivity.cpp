@@ -1,4 +1,4 @@
-#include "HeadwaterArchiveActivity.h"
+#include "HeadwaterFolderActivity.h"
 
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <string_view>
 
-#include "HeadwaterPaths.h"
 #include "MappedInputManager.h"
 #include "activities/ActivityManager.h"
 #include "activities/reader/ReaderUtils.h"
@@ -26,9 +25,9 @@ std::string displayName(const std::string& fileName) {
 }
 }  // namespace
 
-void HeadwaterArchiveActivity::loadIssues() {
-  issues.clear();
-  auto dir = Storage.open(headwater::ISSUES_DIR);
+void HeadwaterFolderActivity::loadEntries() {
+  entries.clear();
+  auto dir = Storage.open(folderPath.c_str());
   if (!dir || !dir.isDirectory()) return;
 
   char nameBuf[NAME_BUFFER_SIZE];
@@ -37,26 +36,29 @@ void HeadwaterArchiveActivity::loadIssues() {
     if (file.isDirectory()) continue;
     file.getName(nameBuf, NAME_BUFFER_SIZE);
     const std::string_view name{nameBuf};
-    if (FsHelpers::hasEpubExtension(name)) issues.emplace_back(name);
+    if (FsHelpers::hasEpubExtension(name)) entries.emplace_back(name);
   }
-  std::sort(issues.begin(), issues.end(), std::greater<std::string>());
+  std::sort(entries.begin(), entries.end(), std::greater<std::string>());
+
+  // "Archived" hides the newest issue (shown on the app page as "Today").
+  if (reserveNewest && !entries.empty()) entries.erase(entries.begin());
 }
 
-void HeadwaterArchiveActivity::onEnter() {
+void HeadwaterFolderActivity::onEnter() {
   Activity::onEnter();
   selectorIndex = 0;
   lockNextConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
-  loadIssues();
+  loadEntries();
   requestUpdate();
 }
 
-void HeadwaterArchiveActivity::onExit() {
+void HeadwaterFolderActivity::onExit() {
   Activity::onExit();
-  issues.clear();
+  entries.clear();
 }
 
-void HeadwaterArchiveActivity::loop() {
-  const int total = archivedCount();
+void HeadwaterFolderActivity::loop() {
+  const int total = count();
   const int pageItems = UITheme::getNumberOfItemsPerPage(renderer, true, false, true, false);
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
@@ -66,24 +68,23 @@ void HeadwaterArchiveActivity::loop() {
     }
     if (total == 0) return;
 
-    const std::string& fileName = archivedAt(selectorIndex);
-    const std::string fullPath = std::string(headwater::ISSUES_DIR) + "/" + fileName;
+    const std::string& fileName = entries[selectorIndex];
+    const std::string fullPath = folderPath + "/" + fileName;
 
     if (mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
       // Long hold: delete with Channels warning.
       const std::string heading = std::string(tr(STR_DELETE)) + "? " + displayName(fileName);
-      const std::string body = tr(STR_HEADWATER_DELETE_WARNING);
       startActivityForResult(
-          std::make_unique<ConfirmationActivity>(renderer, mappedInput, heading, body),
+          std::make_unique<ConfirmationActivity>(renderer, mappedInput, heading, deleteWarning),
           [this, fullPath](const ActivityResult& res) {
             if (!res.isCancelled) {
               clearBookCache(fullPath);
               Storage.remove(fullPath.c_str());
-              loadIssues();
-              if (archivedCount() == 0) {
-                finish();  // archive empty — go back to app
-              } else if (selectorIndex >= static_cast<size_t>(archivedCount())) {
-                selectorIndex = static_cast<size_t>(archivedCount()) - 1;
+              loadEntries();
+              if (count() == 0) {
+                finish();  // folder empty — go back to app
+              } else if (selectorIndex >= static_cast<size_t>(count())) {
+                selectorIndex = static_cast<size_t>(count()) - 1;
               }
               requestUpdate(true);
             }
@@ -119,24 +120,23 @@ void HeadwaterArchiveActivity::loop() {
   });
 }
 
-void HeadwaterArchiveActivity::render(RenderLock&&) {
+void HeadwaterFolderActivity::render(RenderLock&&) {
   renderer.clearScreen();
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_HEADWATER_ARCHIVE));
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, header.c_str());
 
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
   const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
 
-  const int total = archivedCount();
+  const int total = count();
   if (total == 0) {
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2, tr(STR_HEADWATER_NO_ISSUES));
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2, emptyLabel.c_str());
   } else {
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, total,
-                 static_cast<int>(selectorIndex),
-                 [this](int i) -> std::string { return displayName(archivedAt(static_cast<size_t>(i))); });
+    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, total, static_cast<int>(selectorIndex),
+                 [this](int i) -> std::string { return displayName(entries[static_cast<size_t>(i)]); });
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), total > 0 ? tr(STR_SELECT) : "",

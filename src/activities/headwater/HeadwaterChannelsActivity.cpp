@@ -38,8 +38,7 @@ void HeadwaterChannelsActivity::onExit() {
 
 void HeadwaterChannelsActivity::openSelected() {
   const auto& entry = index.channels[channelIndex].entries[itemIndex];
-  const std::string path = std::string(headwater::ISSUES_DIR) + "/" + entry.issueFile;
-  activityManager.goToReader(path, entry.anchor);
+  activityManager.goToReader(entry.path, entry.anchor);
 }
 
 void HeadwaterChannelsActivity::loop() {

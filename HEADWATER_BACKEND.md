@@ -197,11 +197,21 @@ re-issuing the EPUB.
    sideloads (USB / file transfer) — not a synced acquisition entry. This matches the locked
    "custom-export EPUBs are user-driven" decision; the persistent synced "Saved" shelf was
    explicitly rejected (too costly for a 380 KB device).
-   **Device consequence:** there is **no separate synced "Saved" section.** The Headwater app's
-   issue list shows whatever is in `/Headwater` — synced digests *and* any sideloaded export.
-   The channels view is built **only from manifests**, so a sideloaded export with no embedded
-   manifest simply appears in the flat issue list and is absent from the channel index (fine).
-   The "Today / Digests / Saved" sectioning collapses to one issues list for now.
+
+   **Device model (shipped):** sideloaded exports go in a dedicated **`/Headwater/My Summaries/`**
+   subfolder, surfaced on its own "My Summaries" page in the Headwater app (Today's digest stays
+   the main inbox; older digests live under "Archived"). The directory scan skips subfolders, so
+   sideloads never pollute the daily inbox or the Archived list.
+
+   **➤ Backend ask (small, optional but wanted): embed the manifest in per-summary exports too.**
+   Channels is built **only from `OEBPS/headwater-manifest.json`**, and the device now scans both
+   `/Headwater/` *and* `/Headwater/My Summaries/` for manifests. So if the per-summary "export
+   EPUB" embeds the **same manifest format** (just a single `items[]` entry: `channelId`,
+   `channel`, `videoTitle`, `anchor`, `date`), each saved summary automatically merges into its
+   channel in Channels alongside the digests — no new format, no new endpoint. A per-summary
+   export **without** a manifest still works: it just appears under "My Summaries" and is absent
+   from Channels (graceful degradation). Deleting a saved summary on-device also removes it from
+   Channels (same self-heal as digests), and the delete confirmation warns about this.
 
 ---
 
