@@ -17,6 +17,7 @@
 #include "activities/network/OpdsSyncActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "images/HeadwaterHeader.h"
 
 namespace {
 constexpr size_t NAME_BUFFER_SIZE = 256;
@@ -24,6 +25,17 @@ constexpr size_t NAME_BUFFER_SIZE = 256;
 std::string displayName(const std::string& fileName) {
   const auto pos = fileName.rfind('.');
   return pos == std::string::npos ? fileName : fileName.substr(0, pos);
+}
+
+// The masthead already says "Headwater", so drop that from the issue's own name
+// for the Today row: "Headwater Daily 2026-06-29" -> "Daily 2026-06-29".
+std::string issueLabel(const std::string& fileName) {
+  std::string name = displayName(fileName);
+  for (const char* prefix : {"Headwater - ", "Headwater "}) {
+    const std::string_view p{prefix};
+    if (name.rfind(p, 0) == 0) name.erase(0, p.size());
+  }
+  return name;
 }
 
 // Top-level EPUB file names in `dir`, newest-first (descending name sort).
@@ -72,8 +84,8 @@ std::vector<HeadwaterAppActivity::Row> HeadwaterAppActivity::buildRows() const {
   if (hasIssues) rows.push_back(Row::Today);
   rows.push_back(Row::Sync);
   if (hasIssues || hasSaved) rows.push_back(Row::Channels);
-  if (issues.size() > 1) rows.push_back(Row::Archived);
   if (hasSaved) rows.push_back(Row::MySummaries);
+  if (issues.size() > 1) rows.push_back(Row::Archived);
   return rows;
 }
 
@@ -189,25 +201,54 @@ void HeadwaterAppActivity::render(RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
   const auto& metrics   = UITheme::getInstance().getMetrics();
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_HEADWATER));
+  // Battery chrome only (nullptr title); the masthead graphic below is our brand.
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, nullptr);
 
-  const int contentTop    = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
+  // "Headwater" masthead (baked 1-bit artwork from the Headwater creative team).
+  // The bitmap is stored pre-rotated 90deg, so on screen it renders
+  // HeadwaterHeaderHeight wide x HeadwaterHeaderWidth tall. For a rotated
+  // drawImage the on-screen y becomes the framebuffer byte-column origin, so it
+  // must be a multiple of 8 (hence the & ~7).
+  const int mastheadW = HeadwaterHeaderHeight;  // on-screen width
+  const int mastheadH = HeadwaterHeaderWidth;   // on-screen height
+  const int mastheadX = (pageWidth - mastheadW) / 2;
+  // Hug the battery: the header band reserves 45px but the battery glyph is only
+  // ~12px tall (drawn at y+5), leaving dead space. Sit just under the glyph. The
+  // masthead y is the framebuffer byte-column origin for a rotated image, so it
+  // must stay a multiple of 8.
+  const int batteryBottom = metrics.topPadding + 5 + metrics.batteryHeight;
+  const int mastheadY     = ((batteryBottom + 7) & ~7) + 8;  // one byte-row of clearance
+  renderer.drawImage(HeadwaterHeader, mastheadX, mastheadY, HeadwaterHeaderWidth, HeadwaterHeaderHeight);
+
+  // Only 4-ish rows, so give the menu a little air below the masthead.
+  const int menuTop = mastheadY + mastheadH + metrics.homeMenuTopOffset + 18;
+  const int menuHeight = pageHeight - menuTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
 
   const auto rows      = buildRows();
   const int totalItems = static_cast<int>(rows.size());
 
-  GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, totalItems,
-               static_cast<int>(selectorIndex), [this, &rows](int i) -> std::string {
-                 switch (rows[i]) {
-                   case Row::Today:       return displayName(issues[0]);
-                   case Row::Sync:        return tr(STR_HEADWATER_SYNC_NOW);
-                   case Row::Channels:    return tr(STR_HEADWATER_CHANNELS);
-                   case Row::Archived:    return tr(STR_HEADWATER_ARCHIVE);
-                   case Row::MySummaries: return tr(STR_HEADWATER_MY_SUMMARIES);
-                 }
-                 return {};
-               });
+  GUI.drawButtonMenu(
+      renderer, Rect{0, menuTop, pageWidth, menuHeight}, totalItems, static_cast<int>(selectorIndex),
+      [this, &rows](int i) -> std::string {
+        switch (rows[i]) {
+          case Row::Today:       return issueLabel(issues[0]);
+          case Row::Sync:        return tr(STR_HEADWATER_SYNC_NOW);
+          case Row::Channels:    return tr(STR_HEADWATER_CHANNELS);
+          case Row::Archived:    return tr(STR_HEADWATER_ARCHIVE);
+          case Row::MySummaries: return tr(STR_HEADWATER_MY_SUMMARIES);
+        }
+        return {};
+      },
+      [&rows](int i) -> UIIcon {
+        switch (rows[i]) {
+          case Row::Today:       return Book;      // the issue you open and read
+          case Row::Sync:        return Wifi;      // the network pull
+          case Row::Channels:    return Library;   // browse the collection
+          case Row::Archived:    return Folder;    // older-issues drawer
+          case Row::MySummaries: return Recent;    // booklet+ribbon: saved / curated
+        }
+        return None;
+      });
 
   const auto labels = mappedInput.mapLabels(tr(STR_HOME), tr(STR_SELECT),
                                             totalItems > 1 ? tr(STR_DIR_UP) : "",
