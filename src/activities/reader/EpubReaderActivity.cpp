@@ -32,6 +32,7 @@
 #include "QrDisplayActivity.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
+#include "activities/headwater/HeadwaterPaths.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/BookmarkUtil.h"
@@ -374,7 +375,7 @@ void EpubReaderActivity::loop() {
       restoreSavedPosition();
       return;
     }
-    onGoHome();
+    backOutToParent();
     return;
   }
 
@@ -412,7 +413,7 @@ void EpubReaderActivity::loop() {
   // At end of the book, forward button goes home and back button returns to last page
   if (currentSpineIndex > 0 && currentSpineIndex >= epub->getSpineItemsCount()) {
     if (nextTriggered) {
-      onGoHome();
+      backOutToParent();
     } else {
       currentSpineIndex = epub->getSpineItemsCount() - 1;
       nextPageNumber = 0;
@@ -1277,6 +1278,18 @@ void EpubReaderActivity::restoreSavedPosition() {
     section.reset();
   }
   requestUpdate();
+}
+
+void EpubReaderActivity::backOutToParent() {
+  // Headwater digests and saved summaries live under /Headwater; backing out of
+  // one returns to the Headwater app (its menu), which is the sub-app the reader
+  // was launched from, rather than the global Home menu.
+  static const std::string headwaterPrefix = std::string(headwater::ISSUES_DIR) + "/";
+  if (epub && epub->getPath().rfind(headwaterPrefix, 0) == 0) {
+    activityManager.goToHeadwaterApp();
+    return;
+  }
+  onGoHome();
 }
 
 void EpubReaderActivity::loadCachedBookmarks() {

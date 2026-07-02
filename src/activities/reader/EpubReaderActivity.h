@@ -78,6 +78,10 @@ class EpubReaderActivity final : public Activity {
   void navigateToHref(const std::string& href, bool savePosition = false);
   void restoreSavedPosition();
 
+  // Exit the reader to its parent. A digest/summary under /Headwater backs out to
+  // the Headwater app (its menu); everything else goes to the global Home menu.
+  void backOutToParent();
+
   // When non-empty, the reader jumps to this href on open (overrides saved progress).
   // Use for deep-links from the Channels view (e.g. "summary-abc123.xhtml").
   std::string initialHref;
