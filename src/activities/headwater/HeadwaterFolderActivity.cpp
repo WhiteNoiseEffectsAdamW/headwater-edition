@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <string_view>
 
+#include "HeadwaterDeleted.h"
 #include "MappedInputManager.h"
 #include "activities/ActivityManager.h"
 #include "activities/reader/ReaderUtils.h"
@@ -76,10 +77,13 @@ void HeadwaterFolderActivity::loop() {
       const std::string heading = std::string(tr(STR_DELETE)) + "? " + displayName(fileName);
       startActivityForResult(
           std::make_unique<ConfirmationActivity>(renderer, mappedInput, heading, deleteWarning),
-          [this, fullPath](const ActivityResult& res) {
+          [this, fullPath, fileName](const ActivityResult& res) {
             if (!res.isCancelled) {
               clearBookCache(fullPath);
               Storage.remove(fullPath.c_str());
+              // Tombstone it so the next sync doesn't re-pull it while it's still
+              // inside the rolling feed window.
+              headwater::markIssueDeleted(fileName);
               loadEntries();
               if (count() == 0) {
                 finish();  // folder empty — go back to app

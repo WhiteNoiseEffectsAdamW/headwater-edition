@@ -6,9 +6,12 @@
 #include <OpdsStream.h>
 #include <WiFi.h>
 
+#include <set>
+
 #include "MappedInputManager.h"
 #include "SilentRestart.h"
 #include "WifiCredentialStore.h"
+#include "activities/headwater/HeadwaterDeleted.h"
 #include "activities/headwater/HeadwaterPaths.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -112,6 +115,15 @@ void OpdsSyncActivity::fetchAndQueue() {
   }
 
   Storage.mkdir(headwater::ISSUES_DIR);  // ensure the destination folder exists (no-op if present)
+  // Pushed "send-to-device" collections land in My Summaries (kept out of the
+  // daily inbox); ensure that folder exists before any export download.
+  Storage.ensureDirectoryExists(headwater::MY_SUMMARIES_DIR);
+
+  // Issues the user deleted on-device: don't re-pull them while they're still in
+  // the feed window. Track every filename the feed offers so the tombstone list
+  // can be pruned back to the current window once the walk succeeds.
+  const std::set<std::string> deleted = headwater::loadDeletedIssues();
+  std::set<std::string> feedNames;
 
   // Walk the feed (following pagination) and queue any issue not already on disk.
   std::string url = server.url;
@@ -131,9 +143,16 @@ void OpdsSyncActivity::fetchAndQueue() {
       if (entry.type != OpdsEntryType::BOOK) continue;
       // Resolve the download URL relative to the page it came from.
       const std::string downloadUrl = UrlUtils::buildUrl(url, entry.href);
-      const std::string path =
-          std::string(headwater::ISSUES_DIR) + "/" +
+      // Pushed collections are served from /opds/<token>/export/<id>.epub; route
+      // those into My Summaries so they don't pollute the daily inbox / Archived.
+      // Detection is on the href (stable contract), not the title (display-only).
+      const bool isExport = entry.href.find("/export/") != std::string::npos;
+      const char* destDir = isExport ? headwater::MY_SUMMARIES_DIR : headwater::ISSUES_DIR;
+      const std::string fileName =
           StringUtils::sanitizeFilename((entry.author.empty() ? "" : entry.author + " - ") + entry.title) + ".epub";
+      feedNames.insert(fileName);
+      if (deleted.count(fileName)) continue;  // user deleted it; don't re-pull
+      const std::string path = std::string(destDir) + "/" + fileName;
       if (Storage.exists(path.c_str())) continue;  // idempotent: we already have this issue
       pending.push_back({downloadUrl, path, entry.title});
     }
@@ -141,6 +160,16 @@ void OpdsSyncActivity::fetchAndQueue() {
     // Advance to the next page, resolving relative links against the current page.
     const std::string& next = parser.getNextPageUrl();
     url = next.empty() ? "" : (next.rfind("http", 0) == 0 ? next : UrlUtils::buildUrl(url, next));
+  }
+
+  // The whole feed walked cleanly (errors return early above). Prune tombstones
+  // for issues that have aged out of the window so the list can't grow forever.
+  if (!deleted.empty()) {
+    std::set<std::string> kept;
+    for (const auto& name : deleted) {
+      if (feedNames.count(name)) kept.insert(name);
+    }
+    if (kept.size() != deleted.size()) headwater::saveDeletedIssues(kept);
   }
 
   currentIssue = 0;
