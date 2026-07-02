@@ -21,6 +21,7 @@ See [HEADWATER.md](HEADWATER.md) for the device-side design.
 | **P0** — clean ISO title, no `dc:creator` | ⏳ **Pending prod redeploy.** Fix coded (`afd161d`, `28c9a10`). Feed `<title>` is already clean (`Headwater Daily YYYY-MM-DD`) via the rolling-feed deploy, so the **device filename is clean now**; the remaining `dc:creator`/`dc:title` cleanup is EPUB-internal and cosmetic to the device (we label from the filename). |
 | **Named EPUB exports** | ⏳ **Committed, not pushed** (backend `8592ea7`, pending review). Manual "Download EPUB" sideload path takes an optional collection name → `dc:title = "Headwater — <Name>"`, filename `headwater-<name>.epub`. **By design these omit the manifest**, so they land in My Summaries (flat sideload), **not** Channels. See the open question below. |
 | **Manifest in named exports** | ➡️ **Requested (2026-06-29).** Device is ready — Channels scans `/Headwater/My Summaries/` for manifests. Ask: emit the **same** `OEBPS/headwater-manifest.json` in export EPUBs, listing that export's videos (same per-item schema + matching anchors as the digest). Then saved collections merge into Channels with no device change. Manifest-less exports keep working (My Summaries only). See "Manifest in named exports" below. |
+| **Send-to-device (transient feed exports)** | ➡️ **Device-side shipped** ahead of backend. Backend plan: a `device_exports` snapshot table → extra OPDS entries served from `/opds/<token>/export/<id>.epub`, 14-day window, immutable per push. **Device routes by href:** any entry whose acquisition href contains **`/export/`** downloads into `/Headwater/My Summaries/` (not the daily inbox); everything else stays a daily issue. With the manifest (above) it merges into Channels. See contract below. |
 | **P2** — AccountPage token + copy-URL onboarding | Open (see below). |
 
 ### Rolling-feed contract (device-relevant, backend `6dde8ee`)
@@ -29,6 +30,23 @@ See [HEADWATER.md](HEADWATER.md) for the device-side design.
 - `<updated>` = issue close timestamp (11:00 UTC of that day), **stable across fetches** (not request time).
 - Closed issues are **immutable** (`Cache-Control: max-age=86400`) → a dated URL always returns the same bytes; safe to cache device-side.
 - Day boundary = **11:00 UTC for everyone** (matches the timezone-less digest). Near-rollover email-vs-device drift is known/accepted.
+
+### Send-to-device contract (device-side shipped 2026-06-29)
+The device's sync (`OpdsSyncActivity`) now distinguishes pushed collections from daily issues
+**purely by acquisition href**, so the backend's table-vs-flag internals don't matter to it:
+- Acquisition href contains **`/export/`** (i.e. `/opds/<token>/export/<id>.epub`) → file downloads into
+  **`/Headwater/My Summaries/`**, kept out of the daily inbox / Archived, and merges into Channels iff
+  it carries a manifest (see ask above — `includeManifest: true` on that route).
+- Any other BOOK entry → daily issue in `/Headwater/` (unchanged).
+- Detection is on the **href, not the title** — keep the `/export/` path segment stable; titles are
+  display-only and may change freely.
+- Device dedup stays filename-based, so each push **must be a frozen, dated, immutable** EPUB with a
+  unique title (e.g. `Headwater — Recipes · 2026-06-29`). A mutating bucket would either go stale
+  (constant title → downloaded once, never refreshed) or pile up dupes (changing title → re-downloaded
+  daily). The snapshot-table design satisfies this; a `synced` flag on `user_saves` would not.
+- **Retention note:** the 14-day window governs the *feed* only. Once downloaded, an export persists in
+  My Summaries until the user deletes it on-device (long-press). Re-pushing a collection creates a new
+  dated file rather than replacing the old one — intentional, but frequent re-pushes accumulate.
 
 ### Manifest in named exports — the ask (2026-06-29)
 **What:** when generating a named "Download EPUB" collection (`8592ea7`), also write the **same**
