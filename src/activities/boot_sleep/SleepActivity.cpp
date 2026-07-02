@@ -13,6 +13,7 @@
 #include "activities/reader/ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "images/HeadwaterEdition.h"
 #include "images/Logo120.h"
 #include "images/MoonIcon.h"
 
@@ -156,7 +157,13 @@ void SleepActivity::renderDefaultSleepScreen() const {
   renderer.clearScreen();
   renderer.drawImage(Logo120, (pageWidth - 120) / 2, (pageHeight - 120) / 2, 120, 120);
   renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 70, tr(STR_CROSSPOINT), true, EpdFontFamily::BOLD);
-  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 95, tr(STR_SLEEPING));
+  // "Headwater Edition" wordmark, mirroring the boot screen. Stored pre-rotated
+  // 90deg (renders HeadwaterEditionHeight wide); a rotated drawImage uses y as the
+  // framebuffer byte-column origin, so it must be a multiple of 8.
+  const int hwX = (pageWidth - HeadwaterEditionHeight) / 2;
+  const int hwY = (pageHeight / 2 + 98) & ~7;
+  renderer.drawImage(HeadwaterEdition, hwX, hwY, HeadwaterEditionWidth, HeadwaterEditionHeight);
+  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 135, tr(STR_SLEEPING));
 
   // Make sleep screen dark unless light is selected in settings
   if (SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::LIGHT) {
