@@ -2,7 +2,7 @@
 PlatformIO pre-build script: inject git branch and short SHA into
 CROSSPOINT_VERSION for the default (dev) environment.
 
-Results in a version string like:  1.1.0-dev-feat-kosync-xpath-05c6cf8
+Results in a version string like:  1.4.0+headwater-master-05c6cf8
 Release environments are unaffected; they set CROSSPOINT_VERSION in the ini.
 """
 
@@ -86,7 +86,10 @@ def inject_version(env):
     base_version = get_base_version(project_dir)
     branch = get_git_branch(project_dir)
     short_sha = get_git_short_sha(project_dir)
-    version_string = f'{base_version}-dev-{branch}-{short_sha}'
+    # Headwater Edition build tag. Base version stays (attribution to the
+    # upstream CrossPoint release this is forked from); +headwater marks it as
+    # this fork's build.
+    version_string = f'{base_version}+headwater-{branch}-{short_sha}'
 
     env.Append(CPPDEFINES=[('CROSSPOINT_VERSION', f'\\"{version_string}\\"')])
     print(f'CrossPoint build version: {version_string}')
