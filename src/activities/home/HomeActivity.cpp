@@ -117,7 +117,10 @@ void HomeActivity::onEnter() {
   Activity::onEnter();
 
   hasOpdsServers = OPDS_STORE.hasServers();
-  hasHeadwater = OPDS_STORE.getHeadwaterServer() != nullptr;
+  // Headwater Edition: the app entry is always present (pre-selected at boot).
+  // Before a feed is configured it opens to a "connect your account" screen, so
+  // a freshly-flashed device is never missing its headline app.
+  hasHeadwater = true;
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   loadRecentBooks(metrics.homeRecentBooksCount);

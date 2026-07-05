@@ -76,6 +76,7 @@ void HeadwaterAppActivity::reloadData() {
   Storage.ensureDirectoryExists(headwater::MY_SUMMARIES_DIR);
   scanEpubNames(headwater::ISSUES_DIR, issues);
   hasSaved = folderHasEpub(headwater::MY_SUMMARIES_DIR);
+  hasFeed = OPDS_STORE.getHeadwaterServer() != nullptr;
 }
 
 std::vector<HeadwaterAppActivity::Row> HeadwaterAppActivity::buildRows() const {
@@ -93,6 +94,7 @@ void HeadwaterAppActivity::onEnter() {
   Activity::onEnter();
   // Pre-select today's issue when one exists; otherwise the first available row.
   selectorIndex = 0;
+  viewingConnectHelp = false;
   // Launched from the Home menu with Confirm held: swallow that release so we
   // don't immediately open today's issue.
   lockNextConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
@@ -109,7 +111,11 @@ void HeadwaterAppActivity::onSelectSync() {
   const OpdsServer* server = OPDS_STORE.getHeadwaterServer();
   if (server) {
     activityManager.replaceActivity(std::make_unique<OpdsSyncActivity>(renderer, mappedInput, *server));
+    return;
   }
+  // No feed configured yet: guide the user through setup instead of no-op'ing.
+  viewingConnectHelp = true;
+  requestUpdate(true);
 }
 
 void HeadwaterAppActivity::onSelectIssue(const std::string& fileName) {
@@ -159,6 +165,25 @@ void HeadwaterAppActivity::onActivate(Row row) {
 }
 
 void HeadwaterAppActivity::loop() {
+  // Setup-help screen: Back dismisses the help (if the user opened it over a
+  // populated menu) or leaves to Home (fresh-flash state). No menu nav.
+  if (showConnectHelp()) {
+    // Swallow the Confirm release that launched us from the Home menu.
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && lockNextConfirmRelease) {
+      lockNextConfirmRelease = false;
+      return;
+    }
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      if (viewingConnectHelp) {
+        viewingConnectHelp = false;
+        requestUpdate(true);
+      } else {
+        onGoHome();
+      }
+    }
+    return;
+  }
+
   const auto rows = buildRows();
   const int totalItems = static_cast<int>(rows.size());
   const int pageItems = UITheme::getNumberOfItemsPerPage(renderer, true, false, true, false);
@@ -195,33 +220,61 @@ void HeadwaterAppActivity::loop() {
   });
 }
 
-void HeadwaterAppActivity::render(RenderLock&&) {
+int HeadwaterAppActivity::drawMasthead() const {
   renderer.clearScreen();
-  const auto pageWidth  = renderer.getScreenWidth();
-  const auto pageHeight = renderer.getScreenHeight();
-  const auto& metrics   = UITheme::getInstance().getMetrics();
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto& metrics  = UITheme::getInstance().getMetrics();
 
   // Battery chrome only (nullptr title); the masthead graphic below is our brand.
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, nullptr);
 
-  // "Headwater" masthead (baked 1-bit artwork from the Headwater creative team).
-  // The bitmap is stored pre-rotated 90deg, so on screen it renders
-  // HeadwaterHeaderHeight wide x HeadwaterHeaderWidth tall. For a rotated
-  // drawImage the on-screen y becomes the framebuffer byte-column origin, so it
-  // must be a multiple of 8 (hence the & ~7).
+  // "Headwater" masthead (baked 1-bit artwork). Stored pre-rotated 90deg, so on
+  // screen it renders HeadwaterHeaderHeight wide x HeadwaterHeaderWidth tall. For
+  // a rotated drawImage the on-screen y becomes the framebuffer byte-column
+  // origin, so it must be a multiple of 8 (hence the & ~7).
   const int mastheadW = HeadwaterHeaderHeight;  // on-screen width
   const int mastheadH = HeadwaterHeaderWidth;   // on-screen height
   const int mastheadX = (pageWidth - mastheadW) / 2;
   // Hug the battery: the header band reserves 45px but the battery glyph is only
-  // ~12px tall (drawn at y+5), leaving dead space. Sit just under the glyph. The
-  // masthead y is the framebuffer byte-column origin for a rotated image, so it
-  // must stay a multiple of 8.
+  // ~12px tall (drawn at y+5), leaving dead space. Sit just under the glyph.
   const int batteryBottom = metrics.topPadding + 5 + metrics.batteryHeight;
   const int mastheadY     = ((batteryBottom + 7) & ~7) + 8;  // one byte-row of clearance
   renderer.drawImage(HeadwaterHeader, mastheadX, mastheadY, HeadwaterHeaderWidth, HeadwaterHeaderHeight);
+  return mastheadY + mastheadH;
+}
+
+void HeadwaterAppActivity::renderConnectHelp() {
+  const int belowMasthead = drawMasthead();
+  const auto& metrics = UITheme::getInstance().getMetrics();
+
+  int y = belowMasthead + metrics.homeMenuTopOffset + 24;
+  renderer.drawCenteredText(UI_12_FONT_ID, y, tr(STR_HEADWATER_SETUP_TITLE), true, EpdFontFamily::BOLD);
+  y += 44;
+  for (const char* line : {tr(STR_HEADWATER_SETUP_L1), tr(STR_HEADWATER_SETUP_L2), tr(STR_HEADWATER_SETUP_L3),
+                           tr(STR_HEADWATER_SETUP_L4), tr(STR_HEADWATER_SETUP_L5)}) {
+    renderer.drawCenteredText(UI_10_FONT_ID, y, line);
+    y += 28;
+  }
+
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer();
+}
+
+void HeadwaterAppActivity::render(RenderLock&&) {
+  // Fresh flash / no feed configured: show setup guidance, never a dead menu.
+  if (showConnectHelp()) {
+    renderConnectHelp();
+    return;
+  }
+
+  const int belowMasthead = drawMasthead();
+  const auto pageWidth  = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const auto& metrics   = UITheme::getInstance().getMetrics();
 
   // Only 4-ish rows, so give the menu a little air below the masthead.
-  const int menuTop = mastheadY + mastheadH + metrics.homeMenuTopOffset + 18;
+  const int menuTop = belowMasthead + metrics.homeMenuTopOffset + 18;
   const int menuHeight = pageHeight - menuTop - metrics.buttonHintsHeight - metrics.verticalSpacing;
 
   const auto rows      = buildRows();

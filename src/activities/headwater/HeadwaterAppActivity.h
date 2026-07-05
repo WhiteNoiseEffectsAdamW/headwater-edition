@@ -31,12 +31,24 @@ class HeadwaterAppActivity final : public Activity {
   std::vector<std::string> issues;
   // True when /Headwater/My Summaries holds at least one EPUB.
   bool hasSaved = false;
+  // True when a Headwater OPDS feed is configured (getHeadwaterServer()).
+  bool hasFeed = false;
+  // True when the user pressed Update without a feed configured: show the setup
+  // help until they back out of it.
+  bool viewingConnectHelp = false;
   // True when entered while Confirm was held (launched from the Home menu); we
   // swallow the next release so we don't immediately open the first issue.
   bool lockNextConfirmRelease = false;
 
-  void reloadData();              // rescan issues + hasSaved (also auto-creates the folder)
+  void reloadData();              // rescan issues + hasSaved + hasFeed (also auto-creates the folder)
   std::vector<Row> buildRows() const;
+  // Fresh-flash / unconfigured state: no feed and nothing on disk yet, or the
+  // user asked for setup help. Shows the "connect your account" screen instead
+  // of the (empty) menu so the app is never a dead end after flashing.
+  bool showConnectHelp() const { return viewingConnectHelp || (!hasFeed && issues.empty() && !hasSaved); }
+  // Draws the battery chrome + masthead; returns the y just below the masthead.
+  int drawMasthead() const;
+  void renderConnectHelp();
 
   void onActivate(Row row);
   void onSelectIssue(const std::string& fileName);
