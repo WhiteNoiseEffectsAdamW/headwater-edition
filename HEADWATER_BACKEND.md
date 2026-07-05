@@ -11,7 +11,7 @@ See [HEADWATER.md](HEADWATER.md) for the device-side design.
 
 ---
 
-## Status (2026-06-29)
+## Status (2026-06-29, updated 2026-07-02)
 
 | Item | State |
 |------|-------|
@@ -20,8 +20,8 @@ See [HEADWATER.md](HEADWATER.md) for the device-side design.
 | **Rolling 14-day feed window** | ✅ **LIVE** (backend `6dde8ee`). Feed advertises the **last 14 completed digest-days**, newest-first, non-empty only — channel backlog is now 14 days deep. **Zero device work**; we already follow pagination + group across issues. Contract below. |
 | **P0** — clean ISO title, no `dc:creator` | ⏳ **Pending prod redeploy.** Fix coded (`afd161d`, `28c9a10`). Feed `<title>` is already clean (`Headwater Daily YYYY-MM-DD`) via the rolling-feed deploy, so the **device filename is clean now**; the remaining `dc:creator`/`dc:title` cleanup is EPUB-internal and cosmetic to the device (we label from the filename). |
 | **Named EPUB exports** | ⏳ **Committed, not pushed** (backend `8592ea7`, pending review). Manual "Download EPUB" sideload path takes an optional collection name → `dc:title = "Headwater — <Name>"`, filename `headwater-<name>.epub`. **By design these omit the manifest**, so they land in My Summaries (flat sideload), **not** Channels. See the open question below. |
-| **Manifest in named exports** | ➡️ **Requested (2026-06-29).** Device is ready — Channels scans `/Headwater/My Summaries/` for manifests. Ask: emit the **same** `OEBPS/headwater-manifest.json` in export EPUBs, listing that export's videos (same per-item schema + matching anchors as the digest). Then saved collections merge into Channels with no device change. Manifest-less exports keep working (My Summaries only). See "Manifest in named exports" below. |
-| **Send-to-device (transient feed exports)** | ➡️ **Device-side shipped** ahead of backend. Backend plan: a `device_exports` snapshot table → extra OPDS entries served from `/opds/<token>/export/<id>.epub`, 14-day window, immutable per push. **Device routes by href:** any entry whose acquisition href contains **`/export/`** downloads into `/Headwater/My Summaries/` (not the daily inbox); everything else stays a daily issue. With the manifest (above) it merges into Channels. See contract below. |
+| **Manifest in named exports** | ✅ **Shipped (2026-07-02).** Send-to-device exports carry the **same** `OEBPS/headwater-manifest.json` (per-video schema + matching anchors), so saved collections merge into Channels with no device change. Manifest-less exports still degrade gracefully (My Summaries only). |
+| **Send-to-device (transient feed exports)** | ✅ **LIVE both sides (2026-07-02).** Backend deployed: `POST /api/videos/send-to-device { ids, name }` snapshots the selected videos into an immutable `device_exports` row (409 if the user has no OPDS token). The OPDS feed advertises active sends as extra entries — title `Headwater — <name> · YYYY-MM-DD` (unique/dated, same dedup contract as issues), url `/opds/:token/export/:id.epub`, **manifest included**, 14-day retention. **Device routes by href:** any entry whose acquisition href contains **`/export/`** downloads into `/Headwater/My Summaries/`; the manifest merges its videos into Channels. Channels dedups by `videoId`, so a sent video already in a daily issue isn't listed twice. See contract below. |
 | **P2** — AccountPage token + copy-URL onboarding | Open (see below). |
 
 ### Rolling-feed contract (device-relevant, backend `6dde8ee`)
@@ -31,12 +31,13 @@ See [HEADWATER.md](HEADWATER.md) for the device-side design.
 - Closed issues are **immutable** (`Cache-Control: max-age=86400`) → a dated URL always returns the same bytes; safe to cache device-side.
 - Day boundary = **11:00 UTC for everyone** (matches the timezone-less digest). Near-rollover email-vs-device drift is known/accepted.
 
-### Send-to-device contract (device-side shipped 2026-06-29)
-The device's sync (`OpdsSyncActivity`) now distinguishes pushed collections from daily issues
+### Send-to-device contract (LIVE both sides 2026-07-02)
+The device's sync (`OpdsSyncActivity`) distinguishes pushed collections from daily issues
 **purely by acquisition href**, so the backend's table-vs-flag internals don't matter to it:
 - Acquisition href contains **`/export/`** (i.e. `/opds/<token>/export/<id>.epub`) → file downloads into
-  **`/Headwater/My Summaries/`**, kept out of the daily inbox / Archived, and merges into Channels iff
-  it carries a manifest (see ask above — `includeManifest: true` on that route).
+  **`/Headwater/My Summaries/`**, kept out of the daily inbox / Archived, and merges into Channels via
+  its embedded manifest (now shipped — exports carry `OEBPS/headwater-manifest.json`). Channels dedups by
+  `videoId`, so a sent video already present in a daily issue is not listed twice.
 - Any other BOOK entry → daily issue in `/Headwater/` (unchanged).
 - Detection is on the **href, not the title** — keep the `/export/` path segment stable; titles are
   display-only and may change freely.
