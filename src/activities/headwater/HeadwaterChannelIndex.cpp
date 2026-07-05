@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <map>
+#include <set>
 
 #include "HeadwaterManifest.h"
 #include "HeadwaterPaths.h"
@@ -15,8 +16,10 @@ namespace headwater {
 namespace {
 // Scan one directory's top-level EPUBs (non-recursive), folding each manifest's
 // items into byId. Missing directory or absent manifests are silently ignored so
-// the two scan roots are independent.
-void scanDir(const char* dirPath, std::map<std::string, Channel>& byId) {
+// the two scan roots are independent. A video is one video: seenVideoIds keeps
+// the first occurrence and drops repeats (e.g. a sent export that repeats a
+// video already carried by a daily issue), so Channels never lists it twice.
+void scanDir(const char* dirPath, std::map<std::string, Channel>& byId, std::set<std::string>& seenVideoIds) {
   auto dir = Storage.open(dirPath);
   if (!dir || !dir.isDirectory()) return;
 
@@ -33,6 +36,7 @@ void scanDir(const char* dirPath, std::map<std::string, Channel>& byId) {
     if (!loadManifest(path, manifest)) continue;
 
     for (const auto& item : manifest.items) {
+      if (!item.videoId.empty() && !seenVideoIds.insert(item.videoId).second) continue;
       auto& ch = byId[item.channelId];
       if (ch.channelId.empty()) {
         ch.channelId   = item.channelId;
@@ -48,8 +52,9 @@ bool buildChannelIndex(ChannelIndex& out) {
   out.channels.clear();
 
   std::map<std::string, Channel> byId;
-  scanDir(ISSUES_DIR, byId);
-  scanDir(MY_SUMMARIES_DIR, byId);
+  std::set<std::string> seenVideoIds;  // dedup videos shared across issues + exports
+  scanDir(ISSUES_DIR, byId, seenVideoIds);
+  scanDir(MY_SUMMARIES_DIR, byId, seenVideoIds);
 
   if (byId.empty()) return false;
 
