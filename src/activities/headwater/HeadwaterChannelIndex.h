@@ -9,6 +9,7 @@ struct ChannelEntry {
   std::string anchor;      // matches the EPUB TOC href, e.g. "summary-abc123.xhtml"
   std::string videoTitle;
   std::string date;        // ISO date string — used for sort (newest first)
+  std::string videoId;     // stable curation key: read / hidden state (see HeadwaterIdSet)
 };
 
 struct Channel {

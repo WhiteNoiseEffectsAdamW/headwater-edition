@@ -42,7 +42,7 @@ void scanDir(const char* dirPath, std::map<std::string, Channel>& byId, std::set
         ch.channelId   = item.channelId;
         ch.displayName = item.channel.empty() ? item.channelId : item.channel;
       }
-      ch.entries.push_back({path, item.anchor, item.videoTitle, item.date});
+      ch.entries.push_back({path, item.anchor, item.videoTitle, item.date, item.videoId});
     }
   }
 }

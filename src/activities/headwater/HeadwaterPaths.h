@@ -11,4 +11,10 @@ inline constexpr char ISSUES_DIR[] = "/Headwater";
 // while buildChannelIndex() scans it explicitly so saved summaries still merge
 // into Channels alongside the daily digests.
 inline constexpr char MY_SUMMARIES_DIR[] = "/Headwater/My Summaries";
+
+// Hidden sidecar files for Channels curation state (not .epub, so the issue and
+// channel scans skip them). See HeadwaterIdSet.
+inline constexpr char READ_STATE[] = "/Headwater/.read";      // read videoIds
+inline constexpr char HIDDEN_STATE[] = "/Headwater/.hidden";  // hidden videoIds
+inline constexpr char MUTED_STATE[] = "/Headwater/.muted";    // muted channelIds
 }  // namespace headwater
