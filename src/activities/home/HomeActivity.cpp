@@ -18,6 +18,7 @@
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "activities/headwater/HeadwaterAppActivity.h"
+#include "activities/headwater/HeadwaterNav.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -117,6 +118,9 @@ void HomeActivity::onEnter() {
   Activity::onEnter();
 
   hasOpdsServers = OPDS_STORE.hasServers();
+  // Reaching Home ends any Channels reading flow; drop the resume hint so it
+  // can't bounce a later Headwater-app entry straight into Channels.
+  headwater::clearChannelsResume();
   // Headwater Edition: the app entry is always present (pre-selected at boot).
   // Before a feed is configured it opens to a "connect your account" screen, so
   // a freshly-flashed device is never missing its headline app.

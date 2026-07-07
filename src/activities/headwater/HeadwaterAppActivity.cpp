@@ -10,6 +10,7 @@
 
 #include "HeadwaterChannelsActivity.h"
 #include "HeadwaterFolderActivity.h"
+#include "HeadwaterNav.h"
 #include "HeadwaterPaths.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
@@ -99,6 +100,13 @@ void HeadwaterAppActivity::onEnter() {
   // don't immediately open today's issue.
   lockNextConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
   reloadData();
+  // Returning from a summary opened in Channels: re-open Channels where we left
+  // off instead of showing the menu. (Cleared on reaching Home, so this only
+  // fires on the direct reader -> app hop.)
+  if (!headwater::channelsResumeChannelId().empty()) {
+    openChannels();
+    return;
+  }
   requestUpdate();
 }
 
