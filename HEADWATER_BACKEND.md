@@ -1,32 +1,32 @@
 # Headwater Backend — Handoff & Requirements
 
-This is the **handoff list for the Headwater backend team**. The device-side Headwater
-edition (v1 one-press sync) and the **Headwater App** (cross-day Channels, My Summaries,
-send-to-device routing) are shipped and verified on X4/X3 hardware. The backend pieces they
-depend on — per-summary anchors, embedded manifest, rolling 14-day feed, and send-to-device
-— are all deployed.
+This is the **handoff record for the Headwater backend integration**. The device-side
+Headwater edition (v1 one-press sync) and the **Headwater App** (cross-day Channels, My
+Summaries, send-to-device routing) are shipped and verified on X4/X3 hardware. All backend
+deliverables it depends on — per-summary anchors, embedded manifest, rolling 14-day feed, and
+send-to-device (with populated `channelId` and unique export titles) — are **deployed and
+verified end-to-end. Launch-ready** (2026-07-07).
 
 ---
 
-## ⚠️ Known issues
+## ✅ Recently resolved
 
-**P0 — send-to-device export manifests ship an empty `channelId` (2026-07-04).**
-Sent summaries download into My Summaries but **never appear in Channels**. Root cause: the
-export manifest sets `channel` (display name) but leaves `channelId: ""`. The device groups
-Channels by `channelId` (the stable YouTube `UC…` id) and drops any item with a blank one, so
-every item in an export is discarded before it reaches the channel index. Daily-issue
-manifests populate `channelId` correctly — the **export path just isn't copying it**.
-- **Fix:** in the send-to-device manifest builder, set each item's `channelId` from
-  `summaries.channel_id`, identical to the digest path (so exports merge into the *same*
-  channel as the daily issues, not a duplicate).
-- **Verify:** unzip a post-fix `/export/…epub`, confirm every `items[]` has a non-empty
-  `channelId`; on device, Channels then lists the sent videos under their channel.
-- Repro item: videoId `Wc6bxwojYEo`, channel "Dentistry Uncensored with Dr. Howard Farran",
-  `channelId: ""`.
+**Empty `channelId` in export manifests — fixed (2026-07-07).** Root cause was one layer up:
+the on-demand summarize route resolved the channel *name* but dropped `channelId` before
+saving, so those rows had a blank `channel_id`. Backend now persists `channelId` on new
+summaries and backfilled the back-catalog from Supadata metadata (same source as the digest
+path, so ids match and exports fold into the *same* channel). 287/289 rows carry a `UC…` id;
+the ~2 that don't are clip re-uploads with no metadata channel id — they land in My Summaries
+only, which is the correct graceful degradation.
+
+- **Operational note (matters for testing/support):** already-sent exports **won't
+  self-correct** — the device downloaded them by filename before the fix and dedups on that,
+  so they stay filename-deduped and won't back-fill on-device. A **fresh send** picks up the
+  populated manifest. To surface a pre-fix export in Channels, delete it on-device and re-send.
 
 ---
 
-## Status (2026-06-29, updated 2026-07-04)
+## Status (2026-06-29, updated 2026-07-07 — all green, launch-ready)
 
 | Item | State |
 |------|-------|
@@ -34,10 +34,10 @@ manifests populate `channelId` correctly — the **export path just isn't copyin
 | **P1b** — embedded manifest (`OEBPS/headwater-manifest.json`) | ✅ **Shipped.** Channels view live + verified on X4. |
 | **Rolling 14-day feed window** | ✅ **LIVE** (backend `6dde8ee`). Feed advertises the **last 14 completed digest-days**, newest-first, non-empty only — channel backlog is now 14 days deep. **Zero device work**; we already follow pagination + group across issues. Contract below. |
 | **P0** — clean ISO title, no `dc:creator` | ⏳ **Pending prod redeploy.** Fix coded (`afd161d`, `28c9a10`). Feed `<title>` is already clean (`Headwater Daily YYYY-MM-DD`) via the rolling-feed deploy, so the **device filename is clean now**; the remaining `dc:creator`/`dc:title` cleanup is EPUB-internal and cosmetic to the device (we label from the filename). |
-| **Named EPUB exports** | ⏳ **Committed, not pushed** (backend `8592ea7`, pending review). Manual "Download EPUB" sideload path takes an optional collection name → `dc:title = "Headwater — <Name>"`, filename `headwater-<name>.epub`. **By design these omit the manifest**, so they land in My Summaries (flat sideload), **not** Channels. See the open question below. |
-| **Manifest in named exports** | ✅ **Shipped (2026-07-02).** Send-to-device exports carry `OEBPS/headwater-manifest.json` (per-video schema + matching anchors). ⚠️ But its items currently have an **empty `channelId`** — see Known Issues — so the Channels merge does not work yet. |
-| **Send-to-device (transient feed exports)** | ⚠️ **Shipped both sides, blocked on `channelId` (2026-07-04).** Backend deployed: `POST /api/videos/send-to-device { ids, name }` snapshots the selected videos into an immutable `device_exports` row (409 if the user has no OPDS token). The OPDS feed advertises active sends as extra entries — title `Headwater — <name> · YYYY-MM-DD` (unique/dated, same dedup contract as issues), url `/opds/:token/export/:id.epub`, manifest included, 14-day retention. **Device routing works** (any acquisition href containing `/export/` downloads into `/Headwater/My Summaries/`), but **the Channels merge is broken by the empty-`channelId` bug** above. Once `channelId` is populated it works with no device change. See contract below. |
-| **P2** — AccountPage token + copy-URL onboarding | Open (see below). |
+| **Unique export titles** | ✅ **Shipped (2026-07-04).** Each export title carries its unique export id — `Headwater: recipes · 2026-07-04 · #47` — so the device filename can't collide even for same-name/same-day collections (also closes the delete-tombstone reuse cousin). Feed `<title>` and `dc:title` share one builder. (Em dash swapped for a colon — cosmetic; the colon sanitizes to `_` in the device filename.) |
+| **Manifest in named exports** | ✅ **Shipped + verified (2026-07-07).** Send-to-device exports carry `OEBPS/headwater-manifest.json` (per-video schema + matching anchors) with a populated `channelId`, so saved collections merge into Channels with no device change. |
+| **Send-to-device (transient feed exports)** | ✅ **LIVE both sides + verified (2026-07-07).** `POST /api/videos/send-to-device { ids, name }` snapshots the selected videos into an immutable `device_exports` row (409 if the user has no OPDS token). The OPDS feed advertises active sends as extra entries — title `Headwater: <name> · YYYY-MM-DD · #<id>` (unique), url `/opds/:token/export/:id.epub`, manifest **with `channelId`**, 14-day retention. Device routes any acquisition href containing `/export/` into `/Headwater/My Summaries/`, and the manifest merges its videos into Channels; Channels dedups by `videoId`. **Test with a fresh send** — pre-fix exports stay filename-deduped on-device (see Recently resolved). See contract below. |
+| **P2** — AccountPage token + copy-URL onboarding | ✅ **Live.** Account page provides the tokenized feed URL + copy; users paste it into the reader's web page (Settings → OPDS). No on-device typing; verified end-to-end. |
 
 ### Rolling-feed contract (device-relevant, backend `6dde8ee`)
 - Entry `<title>` = `Headwater Daily YYYY-MM-DD` (ISO, date-led) — unique per issue, so filename dedup/sort holds.
@@ -46,13 +46,13 @@ manifests populate `channelId` correctly — the **export path just isn't copyin
 - Closed issues are **immutable** (`Cache-Control: max-age=86400`) → a dated URL always returns the same bytes; safe to cache device-side.
 - Day boundary = **11:00 UTC for everyone** (matches the timezone-less digest). Near-rollover email-vs-device drift is known/accepted.
 
-### Send-to-device contract (shipped both sides; Channels merge blocked on `channelId`)
+### Send-to-device contract (LIVE both sides + verified 2026-07-07)
 The device's sync (`OpdsSyncActivity`) distinguishes pushed collections from daily issues
 **purely by acquisition href**, so the backend's table-vs-flag internals don't matter to it:
 - Acquisition href contains **`/export/`** (i.e. `/opds/<token>/export/<id>.epub`) → file downloads into
-  **`/Headwater/My Summaries/`**, kept out of the daily inbox / Archived. It merges into Channels via its
-  embedded manifest — **once the manifest's `channelId` is populated** (currently empty; see Known
-  Issues). Channels dedups by `videoId`, so a sent video already present in a daily issue is not listed twice.
+  **`/Headwater/My Summaries/`**, kept out of the daily inbox / Archived, and merges into Channels via its
+  embedded manifest (`channelId` populated). Channels dedups by `videoId`, so a sent video already present
+  in a daily issue is not listed twice.
 - Any other BOOK entry → daily issue in `/Headwater/` (unchanged).
 - Detection is on the **href, not the title** — keep the `/export/` path segment stable; titles are
   display-only and may change freely.
