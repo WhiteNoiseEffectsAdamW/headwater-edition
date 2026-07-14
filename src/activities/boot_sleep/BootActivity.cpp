@@ -27,6 +27,9 @@ void BootActivity::onEnter() {
   renderer.drawImage(HeadwaterEdition, hwX, hwY, HeadwaterEditionWidth, HeadwaterEditionHeight);
 
   renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 135, tr(STR_BOOTING));
+  // MIT attribution — rides inside the running firmware (the download page and the
+  // repo LICENSE cover the other two surfaces).
+  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight - 48, tr(STR_HEADWATER_ATTRIBUTION));
   renderer.drawCenteredText(SMALL_FONT_ID, pageHeight - 30, CROSSPOINT_VERSION);
   renderer.displayBuffer();
 }

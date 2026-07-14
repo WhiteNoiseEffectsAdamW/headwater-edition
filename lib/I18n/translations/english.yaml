@@ -3,6 +3,7 @@ _language_code: "EN"
 _order: "0"
 
 STR_CROSSPOINT: "CrossPoint"
+STR_HEADWATER_ATTRIBUTION: "Based on CrossPoint by Dave Allie (MIT)"
 STR_BOOTING: "BOOTING"
 STR_SLEEPING: "SLEEPING"
 STR_ENTERING_SLEEP: "Going to sleep"
