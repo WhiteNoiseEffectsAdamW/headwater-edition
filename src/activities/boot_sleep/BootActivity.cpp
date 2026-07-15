@@ -5,7 +5,7 @@
 
 #include "fontIds.h"
 #include "images/HeadwaterEdition.h"
-#include "images/Logo120.h"
+#include "images/Logo56.h"
 
 void BootActivity::onEnter() {
   Activity::onEnter();
@@ -14,21 +14,24 @@ void BootActivity::onEnter() {
   const auto pageHeight = renderer.getScreenHeight();
 
   renderer.clearScreen();
-  renderer.drawImage(Logo120, (pageWidth - 120) / 2, (pageHeight - 120) / 2, 120, 120);
-  renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 70, tr(STR_CROSSPOINT), true, EpdFontFamily::BOLD);
 
-  // "Headwater Edition" attribution line (EB Garamond, baked 1-bit wordmark).
+  // Headwater leads: the "Headwater Edition" wordmark is the hero, centred.
   // The bitmap is stored pre-rotated 90deg, so on screen it renders
   // HeadwaterEditionHeight wide x HeadwaterEditionWidth tall. For a rotated
   // drawImage the x arg sets the horizontal position and the y arg becomes the
   // framebuffer byte-column origin, so y must be a multiple of 8.
   const int hwX = (pageWidth - HeadwaterEditionHeight) / 2;
-  const int hwY = (pageHeight / 2 + 98) & ~7;
+  const int hwY = (pageHeight / 2 - 40) & ~7;
   renderer.drawImage(HeadwaterEdition, hwX, hwY, HeadwaterEditionWidth, HeadwaterEditionHeight);
 
-  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 135, tr(STR_BOOTING));
-  // MIT attribution — rides inside the running firmware (the download page and the
-  // repo LICENSE cover the other two surfaces).
+  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 10, tr(STR_BOOTING));
+
+  // CrossPoint credit block, deliberately subordinate to the Headwater identity
+  // above: a small logo + the MIT attribution line + version. This is a fork —
+  // the code is CrossPoint's (MIT), so it's credited, but Headwater is the brand.
+  // The attribution also satisfies the MIT notice inside the running firmware
+  // (the download page and the repo LICENSE cover the other two surfaces).
+  renderer.drawImage(Logo56, (pageWidth - Logo56Width) / 2, pageHeight - 110, Logo56Width, Logo56Height);
   renderer.drawCenteredText(SMALL_FONT_ID, pageHeight - 48, tr(STR_HEADWATER_ATTRIBUTION));
   renderer.drawCenteredText(SMALL_FONT_ID, pageHeight - 30, CROSSPOINT_VERSION);
   renderer.displayBuffer();

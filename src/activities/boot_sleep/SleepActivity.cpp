@@ -14,7 +14,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/HeadwaterEdition.h"
-#include "images/Logo120.h"
+#include "images/Logo56.h"
 #include "images/MoonIcon.h"
 
 void SleepActivity::onEnter() {
@@ -155,15 +155,19 @@ void SleepActivity::renderDefaultSleepScreen() const {
   const auto pageHeight = renderer.getScreenHeight();
 
   renderer.clearScreen();
-  renderer.drawImage(Logo120, (pageWidth - 120) / 2, (pageHeight - 120) / 2, 120, 120);
-  renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 70, tr(STR_CROSSPOINT), true, EpdFontFamily::BOLD);
-  // "Headwater Edition" wordmark, mirroring the boot screen. Stored pre-rotated
-  // 90deg (renders HeadwaterEditionHeight wide); a rotated drawImage uses y as the
-  // framebuffer byte-column origin, so it must be a multiple of 8.
+  // Mirror the boot screen: Headwater "Edition" wordmark leads as the hero.
+  // Stored pre-rotated 90deg (renders HeadwaterEditionHeight wide); a rotated
+  // drawImage uses y as the framebuffer byte-column origin, so it must be a
+  // multiple of 8.
   const int hwX = (pageWidth - HeadwaterEditionHeight) / 2;
-  const int hwY = (pageHeight / 2 + 98) & ~7;
+  const int hwY = (pageHeight / 2 - 40) & ~7;
   renderer.drawImage(HeadwaterEdition, hwX, hwY, HeadwaterEditionWidth, HeadwaterEditionHeight);
-  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 135, tr(STR_SLEEPING));
+  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 10, tr(STR_SLEEPING));
+
+  // Small CrossPoint credit mark + MIT attribution, subordinate to the Headwater
+  // identity above (see BootActivity).
+  renderer.drawImage(Logo56, (pageWidth - Logo56Width) / 2, pageHeight - 92, Logo56Width, Logo56Height);
+  renderer.drawCenteredText(SMALL_FONT_ID, pageHeight - 30, tr(STR_HEADWATER_ATTRIBUTION));
 
   // Make sleep screen dark unless light is selected in settings
   if (SETTINGS.sleepScreen != CrossPointSettings::SLEEP_SCREEN_MODE::LIGHT) {
