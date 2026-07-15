@@ -3,6 +3,10 @@
 *An MIT-licensed fork of [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) that turns an
 Xteink X3/X4 into a one-press reader for [Headwater](https://headwaterapp.com).*
 
+<p align="center">
+  <img src="docs/images/headwater/app-menu.jpg" alt="The Headwater app menu on an Xteink e-reader" width="340">
+</p>
+
 Headwater condenses the YouTube channels you follow into a concise daily digest — written summaries you
 read instead of watch. Headwater Edition puts that digest on your e-ink reader: power on, open Headwater,
 press **Update**, and today's issue downloads and is ready to read. No phone, no feed, no notifications.
