@@ -7,9 +7,15 @@ Xteink X3/X4 into a one-press reader for [Headwater](https://headwaterapp.com).*
   <img src="docs/images/headwater/app-menu.jpg" alt="The Headwater app menu on an Xteink e-reader" width="340">
 </p>
 
-Headwater condenses the YouTube channels you follow into a concise daily digest — written summaries you
-read instead of watch. Headwater Edition puts that digest on your e-ink reader: power on, open Headwater,
-press **Update**, and today's issue downloads and is ready to read. No phone, no feed, no notifications.
+[Headwater](https://headwaterapp.com) is a YouTube channel summarizer. It follows the YouTube channels you
+choose, reads each new video, and delivers one morning digest of summaries written in its own words: the
+video's argument, topics with timestamps, the speaker's exact quotes, and a note when a title oversells what
+the video delivers. Read the argument, watch what's worth it.
+
+Headwater Edition is an MIT-licensed fork of CrossPoint that puts that digest on an Xteink X3 or X4 e-ink
+reader: power on, open Headwater, press **Update**, and today's issue downloads over OPDS, ready to read.
+No phone, no feed, no notifications. Details and the flashable build are at
+<https://headwaterapp.com/headwater-edition>.
 
 Everything CrossPoint already does — EPUB reading, file browser, OPDS, wireless transfer, themes, custom
 fonts — still works underneath. This edition only **adds** a dedicated Headwater app on top.
